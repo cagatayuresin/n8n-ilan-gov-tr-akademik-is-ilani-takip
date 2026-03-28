@@ -1,0 +1,40 @@
+name: Workflow JSON Validation
+
+on:
+  push:
+    paths:
+      - "workflow.json"
+  pull_request:
+    paths:
+      - "workflow.json"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON syntax
+        run: python3 -c "import json, sys; json.load(open('workflow.json')); print('✅ JSON syntax valid')"
+
+      - name: Validate n8n workflow structure
+        run: |
+          python3 -c "
+          import json, sys
+          wf = json.load(open('workflow.json'))
+          errors = []
+          for field in ['name', 'nodes', 'connections']:
+              if field not in wf:
+                  errors.append(f'Missing required field: {field}')
+          if 'nodes' in wf:
+              for i, node in enumerate(wf['nodes']):
+                  for f in ['name', 'type', 'id']:
+                      if f not in node:
+                          errors.append(f'Node {i}: missing field \"{f}\"')
+          if errors:
+              print('❌ Validation failed:')
+              for e in errors:
+                  print(f'  - {e}')
+              sys.exit(1)
+          print(f'✅ Workflow valid: {len(wf[\"nodes\"])} nodes, {len(wf[\"connections\"])} connections')
+          "

@@ -1,0 +1,394 @@
+{
+  "name": "ilan.gov.tr - Akademik İlan Takibi (Telegram + Email)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1800,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000001"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "name": "Haftalık Özet Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1800,
+        720
+      ],
+      "id": "a0000001-0001-0001-0001-000000000020"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ========================================\n// KONFİGÜRASYON — Takip etmek istediğiniz\n// kategorileri ve şehirleri burada ayarlayın\n// ========================================\n\nconst CONFIG = {\n  // Takip edilecek kategoriler (birden fazla seçilebilir)\n  // 693 = Araştırma Gör. & Öğretim Gör. & Uzman\n  // 672 = Öğretim Üyesi (Prof., Doç., Dr. Öğr. Üyesi)\n  // 73  = Tüm Akademik Personel Alımları\n  categories: [693, 672],\n\n  // Şehir filtresi (plaka kodları, boş bırakılırsa tüm şehirler)\n  // Örnekler: 6=Ankara, 34=İstanbul, 35=İzmir, 16=Bursa\n  // Boş dizi [] = tüm şehirler\n  cities: [],\n\n  // Sayfa başına maksimum ilan\n  maxResults: 50\n};\n\n// Her kategori için ayrı bir API request objesi oluştur\nconst requests = CONFIG.categories.map(txv => {\n  const keys = { txv: [txv], currentPage: [1] };\n\n  // Şehir filtresi varsa ekle\n  if (CONFIG.cities.length > 0) {\n    keys.cty = CONFIG.cities;\n  }\n\n  return {\n    categoryId: txv,\n    requestBody: JSON.stringify({\n      keys,\n      sorting: 'publish_time desc',\n      skipCount: 0,\n      maxResultCount: CONFIG.maxResults\n    })\n  };\n});\n\nreturn requests;"
+      },
+      "name": "Kategori ve Şehir Ayarları",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1560,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000010"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.ilan.gov.tr/api/api/services/app/Ad/AdsByFilter",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch İlanlar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1320,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000002",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "result.ads",
+        "options": {}
+      },
+      "name": "Her İlanı Ayır",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1080,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000003"
+    },
+    {
+      "parameters": {
+        "jsCode": "// İlan bilgilerini parse et ve HTML-unsafe karakterleri temizle\n\nconst item = $input.item.json;\n\n// HTML-safe escape fonksiyonu\nfunction escapeHtml(text) {\n  if (!text) return '';\n  return String(text)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\n// İlan bilgileri\nconst adId = item.id;\nconst adNo = item.adNo || '';\nconst title = escapeHtml(item.title || '');\nconst city = escapeHtml(item.addressCityName || '');\nconst advertiser = escapeHtml(item.advertiserName || '');\nconst publishDate = item.publishStartDate || '';\nconst urlStr = item.urlStr || '';\nconst adSourceName = escapeHtml(item.adSourceName || '');\n\n// adTypeFilters varsa ek bilgileri çek\nconst adTypeFilters = item.adTypeFilters || [];\nconst filterParts = [];\nadTypeFilters.forEach(f => {\n  if (f.key && f.value) {\n    filterParts.push(`${escapeHtml(f.key)}: ${escapeHtml(f.value)}`);\n  }\n});\nconst filterText = filterParts.join(' | ');\n\nreturn {\n  adId,\n  adNo,\n  title,\n  city,\n  advertiser,\n  publishDate,\n  adSourceName,\n  url: `https://www.ilan.gov.tr${urlStr}`,\n  filterText,\n  cacheKey: `ilan_${adId}`\n};"
+      },
+      "name": "İlan Bilgilerini Hazırla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -840,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000004"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Workflow static data ile deduplication\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.seenAds) {\n  staticData.seenAds = {};\n}\n\nconst item = $input.item.json;\nconst cacheKey = item.cacheKey;\n\n// Bu ilan daha önce görüldü mü?\nif (staticData.seenAds[cacheKey]) {\n  return [];\n}\n\n// Yeni ilan! Kaydet\nstaticData.seenAds[cacheKey] = {\n  seenAt: new Date().toISOString(),\n  adNo: item.adNo,\n  title: item.title,\n  city: item.city,\n  advertiser: item.advertiser\n};\n\n// Eski kayıtları temizle (500'den fazla olmasın)\nconst keys = Object.keys(staticData.seenAds);\nif (keys.length > 500) {\n  const oldestKeys = keys.slice(0, keys.length - 500);\n  oldestKeys.forEach(k => delete staticData.seenAds[k]);\n}\n\nreturn item;"
+      },
+      "name": "Yeni İlan mı Kontrol Et",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000005"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\n// Tarihi Türkçe formatla\nlet tarih = '';\nif (item.publishDate) {\n  const d = new Date(item.publishDate);\n  tarih = d.toLocaleDateString('tr-TR', {\n    day: '2-digit',\n    month: '2-digit',\n    year: 'numeric'\n  });\n}\n\n// --- Telegram Mesajı (HTML) ---\nconst telegramMsg = [\n  `🎓 <b>YENİ AKADEMİK İLAN</b>`,\n  ``,\n  `📋 <b>İlan No:</b> ${item.adNo}`,\n  `🏛️ <b>Kurum:</b> ${item.advertiser}`,\n  `📌 <b>Başlık:</b> ${item.title}`,\n  `📍 <b>Şehir:</b> ${item.city}`,\n  `📅 <b>Yayın Tarihi:</b> ${tarih}`,\n  item.adSourceName ? `📰 <b>Kaynak:</b> ${item.adSourceName}` : '',\n  item.filterText ? `🔍 <b>Detaylar:</b> ${item.filterText}` : '',\n  ``,\n  `🔗 <a href=\"${item.url}\">İlanı Görüntüle</a>`\n].filter(l => l !== '').join('\\n');\n\n// --- Email Mesajı (HTML) ---\nconst emailHtml = `\n<div style=\"font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <div style=\"background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px 12px 0 0;\">\n    <h2 style=\"color: white; margin: 0;\">🎓 Yeni Akademik İlan</h2>\n  </div>\n  <div style=\"background: #f8f9fa; padding: 24px; border-radius: 0 0 12px 12px; border: 1px solid #e9ecef;\">\n    <table style=\"width: 100%; border-collapse: collapse;\">\n      <tr><td style=\"padding: 8px 0; color: #6c757d;\">📋 İlan No</td><td style=\"padding: 8px 0; font-weight: 600;\">${item.adNo}</td></tr>\n      <tr><td style=\"padding: 8px 0; color: #6c757d;\">🏛️ Kurum</td><td style=\"padding: 8px 0; font-weight: 600;\">${item.advertiser}</td></tr>\n      <tr><td style=\"padding: 8px 0; color: #6c757d;\">📌 Başlık</td><td style=\"padding: 8px 0; font-weight: 600;\">${item.title}</td></tr>\n      <tr><td style=\"padding: 8px 0; color: #6c757d;\">📍 Şehir</td><td style=\"padding: 8px 0; font-weight: 600;\">${item.city}</td></tr>\n      <tr><td style=\"padding: 8px 0; color: #6c757d;\">📅 Yayın Tarihi</td><td style=\"padding: 8px 0; font-weight: 600;\">${tarih}</td></tr>\n      ${item.adSourceName ? `<tr><td style=\"padding: 8px 0; color: #6c757d;\">📰 Kaynak</td><td style=\"padding: 8px 0; font-weight: 600;\">${item.adSourceName}</td></tr>` : ''}\n      ${item.filterText ? `<tr><td style=\"padding: 8px 0; color: #6c757d;\">🔍 Detaylar</td><td style=\"padding: 8px 0; font-weight: 600;\">${item.filterText}</td></tr>` : ''}\n    </table>\n    <div style=\"margin-top: 20px; text-align: center;\">\n      <a href=\"${item.url}\" style=\"background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;\">İlanı Görüntüle →</a>\n    </div>\n  </div>\n  <p style=\"text-align: center; color: #adb5bd; font-size: 12px; margin-top: 16px;\">ilan.gov.tr Akademik İlan Takip Sistemi</p>\n</div>`;\n\nconst emailSubject = `🎓 Yeni Akademik İlan: ${item.title.substring(0, 80)}`;\n\nreturn {\n  telegramMessage: telegramMsg,\n  emailHtml: emailHtml,\n  emailSubject: emailSubject\n};"
+      },
+      "name": "Bildirim Mesajlarını Oluştur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        240
+      ],
+      "id": "a0000001-0001-0001-0001-000000000006"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "={{ $json.telegramMessage }}",
+        "additionalFields": {
+          "disable_web_page_preview": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Telegram Gönder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -120,
+        120
+      ],
+      "id": "a0000001-0001-0001-0001-000000000007",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "YOUR_SMTP_FROM_EMAIL",
+        "toEmail": "YOUR_NOTIFY_EMAIL_TO",
+        "subject": "={{ $json.emailSubject }}",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "name": "Email Gönder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -120,
+        360
+      ],
+      "id": "a0000001-0001-0001-0001-000000000008",
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_SMTP_CREDENTIAL_ID",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// HTTP Request hata durumunda loglama\nconst error = $input.item.json;\nconsole.log('ilan.gov.tr API hatası:', JSON.stringify(error));\n\nreturn {\n  errorMessage: `⚠️ ilan.gov.tr API Hatası\\n\\nWorkflow çalıştı ancak API yanıt vermedi veya hata döndü.\\nLütfen n8n execution log'unu kontrol edin.\\n\\nZaman: ${new Date().toLocaleString('tr-TR')}`,\n  errorTimestamp: new Date().toISOString()\n};"
+      },
+      "name": "Hata Yönetimi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1080,
+        480
+      ],
+      "id": "a0000001-0001-0001-0001-000000000009"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Haftalık özet raporu oluştur\nconst staticData = $getWorkflowStaticData('global');\nconst seenAds = staticData.seenAds || {};\n\n// Son 7 gündeki ilanları filtrele\nconst now = new Date();\nconst weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nconst weeklyAds = Object.values(seenAds).filter(ad => {\n  const seenDate = new Date(ad.seenAt);\n  return seenDate >= weekAgo;\n});\n\n// Şehir bazlı istatistik\nconst cityStats = {};\nweeklyAds.forEach(ad => {\n  const city = ad.city || 'Bilinmiyor';\n  cityStats[city] = (cityStats[city] || 0) + 1;\n});\n\n// Kurum bazlı istatistik\nconst instStats = {};\nweeklyAds.forEach(ad => {\n  const inst = ad.advertiser || 'Bilinmiyor';\n  instStats[inst] = (instStats[inst] || 0) + 1;\n});\n\n// Şehir tablosu oluştur\nconst citySorted = Object.entries(cityStats)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 10);\nconst cityLines = citySorted.map(([c, n]) => `  • ${c}: ${n} ilan`).join('\\n');\n\n// Kurum tablosu\nconst instSorted = Object.entries(instStats)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 10);\nconst instLines = instSorted.map(([i, n]) => `  • ${i}: ${n} ilan`).join('\\n');\n\n// Tarih formatla\nconst formatDate = (d) => d.toLocaleDateString('tr-TR', {\n  day: '2-digit', month: '2-digit', year: 'numeric'\n});\n\n// --- Telegram Mesajı ---\nconst telegramMsg = [\n  `📊 <b>HAFTALIK AKADEMİK İLAN ÖZETİ</b>`,\n  `📅 ${formatDate(weekAgo)} — ${formatDate(now)}`,\n  ``,\n  `📈 <b>Toplam Yeni İlan:</b> ${weeklyAds.length}`,\n  ``,\n  `🏙️ <b>Şehirlere Göre:</b>`,\n  cityLines || '  Veri yok',\n  ``,\n  `🏛️ <b>Kurumlara Göre (İlk 10):</b>`,\n  instLines || '  Veri yok'\n].join('\\n');\n\n// --- Email HTML ---\nconst cityRows = citySorted.map(([c, n]) =>\n  `<tr><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${c}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:600;\">${n}</td></tr>`\n).join('');\n\nconst instRows = instSorted.map(([i, n]) =>\n  `<tr><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${i}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:600;\">${n}</td></tr>`\n).join('');\n\nconst emailHtml = `\n<div style=\"font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;\">\n  <div style=\"background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%);padding:20px;border-radius:12px 12px 0 0;\">\n    <h2 style=\"color:white;margin:0;\">📊 Haftalık Akademik İlan Özeti</h2>\n    <p style=\"color:rgba(255,255,255,0.85);margin:8px 0 0;\">${formatDate(weekAgo)} — ${formatDate(now)}</p>\n  </div>\n  <div style=\"background:#f8f9fa;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e9ecef;\">\n    <div style=\"text-align:center;margin-bottom:20px;\">\n      <span style=\"font-size:48px;font-weight:700;color:#11998e;\">${weeklyAds.length}</span>\n      <br><span style=\"color:#6c757d;\">yeni ilan bu hafta</span>\n    </div>\n    <h3 style=\"color:#333;margin:16px 0 8px;\">🏙️ Şehirlere Göre</h3>\n    <table style=\"width:100%;border-collapse:collapse;\">\n      <tr style=\"background:#e9ecef;\"><th style=\"padding:8px 12px;text-align:left;\">Şehir</th><th style=\"padding:8px 12px;text-align:center;\">İlan</th></tr>\n      ${cityRows || '<tr><td colspan=\"2\" style=\"padding:8px;color:#aaa;\">Veri yok</td></tr>'}\n    </table>\n    <h3 style=\"color:#333;margin:20px 0 8px;\">🏛️ Kurumlara Göre (İlk 10)</h3>\n    <table style=\"width:100%;border-collapse:collapse;\">\n      <tr style=\"background:#e9ecef;\"><th style=\"padding:8px 12px;text-align:left;\">Kurum</th><th style=\"padding:8px 12px;text-align:center;\">İlan</th></tr>\n      ${instRows || '<tr><td colspan=\"2\" style=\"padding:8px;color:#aaa;\">Veri yok</td></tr>'}\n    </table>\n  </div>\n  <p style=\"text-align:center;color:#adb5bd;font-size:12px;margin-top:16px;\">ilan.gov.tr Akademik İlan Takip Sistemi</p>\n</div>`;\n\nreturn {\n  telegramMessage: telegramMsg,\n  emailHtml: emailHtml,\n  emailSubject: `📊 Haftalık Akademik İlan Özeti — ${weeklyAds.length} yeni ilan (${formatDate(weekAgo)} - ${formatDate(now)})`\n};"
+      },
+      "name": "Haftalık Özet Oluştur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1560,
+        720
+      ],
+      "id": "a0000001-0001-0001-0001-000000000021"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "={{ $json.telegramMessage }}",
+        "additionalFields": {
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Özet Telegram Gönder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1320,
+        600
+      ],
+      "id": "a0000001-0001-0001-0001-000000000022",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "YOUR_SMTP_FROM_EMAIL",
+        "toEmail": "YOUR_NOTIFY_EMAIL_TO",
+        "subject": "={{ $json.emailSubject }}",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "name": "Özet Email Gönder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -1320,
+        840
+      ],
+      "id": "a0000001-0001-0001-0001-000000000023",
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_SMTP_CREDENTIAL_ID",
+          "name": "SMTP Account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Kategori ve Şehir Ayarları",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kategori ve Şehir Ayarları": {
+      "main": [
+        [
+          {
+            "node": "Fetch İlanlar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch İlanlar": {
+      "main": [
+        [
+          {
+            "node": "Her İlanı Ayır",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hata Yönetimi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Her İlanı Ayır": {
+      "main": [
+        [
+          {
+            "node": "İlan Bilgilerini Hazırla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "İlan Bilgilerini Hazırla": {
+      "main": [
+        [
+          {
+            "node": "Yeni İlan mı Kontrol Et",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yeni İlan mı Kontrol Et": {
+      "main": [
+        [
+          {
+            "node": "Bildirim Mesajlarını Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bildirim Mesajlarını Oluştur": {
+      "main": [
+        [
+          {
+            "node": "Telegram Gönder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Gönder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haftalık Özet Trigger": {
+      "main": [
+        [
+          {
+            "node": "Haftalık Özet Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haftalık Özet Oluştur": {
+      "main": [
+        [
+          {
+            "node": "Özet Telegram Gönder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Özet Email Gönder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "",
+  "tags": []
+}
