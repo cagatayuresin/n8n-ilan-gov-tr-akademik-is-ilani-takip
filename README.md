@@ -4,7 +4,6 @@
 [![Telegram](https://img.shields.io/badge/Telegram-bildirim-26A5E4?logo=telegram&logoColor=white)](https://telegram.org/)
 [![Email](https://img.shields.io/badge/Email-SMTP-D14836?logo=gmail&logoColor=white)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub](https://img.shields.io/github/stars/cagatayuresin/n8n-ilan-gov-tr-akademik-takip?style=social)](https://github.com/cagatayuresin/n8n-ilan-gov-tr-akademik-is-ilani-takip)
 
 [ilan.gov.tr](https://www.ilan.gov.tr/) üzerinde yayımlanan **akademik personel ilanlarını** (Araştırma Görevlisi, Öğretim Görevlisi, Uzman) otomatik olarak takip eden ve yeni ilanları **Telegram** ve **Email** ile bildiren bir n8n workflow'u.
 
