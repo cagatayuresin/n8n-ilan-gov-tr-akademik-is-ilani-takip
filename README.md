@@ -103,6 +103,9 @@ const CONFIG = {
   // Şehir filtresi (boş = tüm şehirler)
   cities: [],
 
+  // Anahtar kelime filtresi (boş bırakılırsa tüm ilanlar, örnek: ["Yapay Zeka", "Bilgisayar"])
+  keywords: [],
+
   // Sayfa başına maksimum ilan
   maxResults: 50
 };
@@ -140,12 +143,23 @@ Boş bırakılırsa (`cities: []`) tüm şehirler takip edilir.
 - `hours` → Her saat (varsayılan)
 - `minutes` + `value: 30` → Her 30 dakika
 
+### Anahtar Kelime Filtresi
+
+Sadece ilgilendiğiniz alanlardaki ilanları takip etmek için `keywords` dizisini kullanabilirsiniz. Bu kelimeler ilan başlığında, kurum adında veya ilan detaylarında (case-insensitive) aranır. Boş bırakılırsa tüm ilanlar gelir.
+```javascript
+keywords: ["Yapay Zeka", "Bilgisayar Mühendisliği", "Yazılım"]
+```
+
 ### Haftalık Özet
 
 **Haftalık Özet Trigger** her Pazartesi saat 09:00'da çalışır. Cron ifadesini değiştirerek zamanlamayı ayarlayabilirsiniz:
 - `0 9 * * 1` → Pazartesi 09:00 (varsayılan)
 - `0 9 * * 5` → Cuma 09:00
 - `0 18 * * 0` → Pazar 18:00
+
+### Son Başvuru Tarihi Hatırlatıcısı
+
+Bu workflow, ilanların son başvuru tarihlerini otomatik olarak tespit eder. "Son Başvuru Hatırlatıcı Trigger" her gün sabah 08:00'de çalışır ve son başvurusuna 2 gün veya daha az kalmış ilanları bularak size Telegram ve Email üzerinden bir uyarı mesajı gönderir. Bir ilanın hatırlatması yapıldıktan sonra bir daha gönderilmez.
 
 ---
 
@@ -232,8 +246,6 @@ Katkılarınızı memnuniyetle karşılıyoruz!
 ### Geliştirme Fikirleri
 
 - [ ] Discord webhook desteği
-- [ ] Anahtar kelime bazlı filtreleme
-- [ ] Başvuru bitiş tarihi uyarısı
 
 ---
 
